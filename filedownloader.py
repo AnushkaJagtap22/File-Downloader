@@ -1,54 +1,65 @@
 import requests
 import os
-from tqdm import tqdm
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
 
-def fetch_and_save_url():
-    url = input("Enter a URL to fetch: ").strip()
-    path = input("Enter the file name (with extension, or leave blank to use '.html'): ").strip()
+def download_file():
+    url = url_entry.get().strip()
+    filename = file_entry.get().strip()
 
-    # ✅ URL validation
     if not url.startswith(('http://', 'https://')):
-        print("❌ Invalid URL. Must start with http:// or https://")
+        messagebox.showerror("Invalid URL", "URL must start with http:// or https://")
         return
 
-    # ✅ Default file name
-    if not path:
-        path = "downloaded_file.html"
-    elif '.' not in path:
-        path += ".html"
+    if not filename:
+        filename = "downloaded_file.html"
+    elif '.' not in filename:
+        filename += ".html"
 
-    # ✅ Warn if file already exists
-    if os.path.exists(path):
-        overwrite = input(f"⚠️ The file '{path}' already exists. Overwrite? (y/n): ").lower()
-        if overwrite != 'y':
-            print("❌ Operation cancelled.")
+    if os.path.exists(filename):
+        if not messagebox.askyesno("File Exists", f"'{filename}' already exists. Overwrite?"):
             return
 
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
 
-        # ✅ Get content length (for progress bar)
-        total = int(response.headers.get('content-length', 0))
+        total_size = int(response.headers.get('content-length', 0))
+        progress_bar["maximum"] = total_size
+        progress_bar["value"] = 0
 
-        # ✅ Save with progress bar if file is large
-        with open(path, 'wb') as file, tqdm(
-            total=total,
-            unit='B',
-            unit_scale=True,
-            desc=path,
-            unit_divisor=1024
-        ) as bar:
+        with open(filename, 'wb') as f:
             for chunk in response.iter_content(chunk_size=1024):
-                file.write(chunk)
-                bar.update(len(chunk))
+                if chunk:
+                    f.write(chunk)
+                    progress_bar["value"] += len(chunk)
+                    root.update_idletasks()
 
-        print(f"\n✅ Successfully fetched content from '{url}' and saved to '{path}'")
+        messagebox.showinfo("Success", f"Downloaded content from {url} to {filename}")
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Network or request error: {e}")
+        messagebox.showerror("Download Failed", f"Error fetching URL:\n{e}")
     except IOError as e:
-        print(f"❌ File write error: {e}")
+        messagebox.showerror("File Error", f"Error saving file:\n{e}")
 
-# Run the function
-fetch_and_save_url()
+# --- GUI Setup ---
+root = tk.Tk()
+root.title("URL Fetcher 📥")
+root.geometry("400x220")
+root.resizable(False, False)
+
+tk.Label(root, text="Enter URL:").pack(pady=5)
+url_entry = tk.Entry(root, width=50)
+url_entry.pack()
+
+tk.Label(root, text="Save As (filename):").pack(pady=5)
+file_entry = tk.Entry(root, width=50)
+file_entry.pack()
+
+progress_bar = ttk.Progressbar(root, length=360, mode='determinate')
+progress_bar.pack(pady=10)
+
+download_button = tk.Button(root, text="Download", command=download_file, bg="#4CAF50", fg="white")
+download_button.pack(pady=10)
+
+root.mainloop()
